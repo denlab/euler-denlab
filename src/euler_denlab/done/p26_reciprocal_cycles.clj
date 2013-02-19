@@ -1,4 +1,4 @@
-(ns euler-denlab.doing.p26-reciprocal-cycles
+(ns euler-denlab.done.p26-reciprocal-cycles
   (:refer-clojure :exclude [inc reify ==])
   (:use
    [clojure.core.logic]
@@ -44,6 +44,14 @@
 ;;
 ;; how to find the cycles
 
+;; general utils --------------------------------------------------------------
+
+(defn- take-while+1 "Like take while, but also include the first element that do not matche the predicate"
+  [pred coll] (let [[a b] (split-with pred coll)]
+                   (lazy-cat a [(first b)])))
+
+;; actual problem -------------------------------------------------------------
+
 (defn- decimal-raw
   [d] (
        iterate
@@ -55,15 +63,57 @@
        {:num 1 :res 0 :continue? true}))
 
 (defn- decimal "returns a (lazy) seq of decimal of a 1/n"
-  [d]
-  (let
-      [s (decimal-raw d)
-       [a b] (split-with :continue? s)]
-
-    (->> a
-         (map :res)
-         (filter identity))))
+  [n]
+  (->> n
+       decimal-raw
+       (take-while+1 :continue?)
+       (map :res)
+       (filter identity)))
 
 (comment "decimal" (->> 7
                         decimal
                         (take 25)))
+
+(defn- cycle-nb "Find the lenght of the cycle of 1/n"
+  [n] (let [s (->> n
+                   decimal-raw
+                   (take-while+1 :continue?)
+                   (filter :res)
+                   (map (fn [x] [(:res x) (:num x)])))
+
+            it (iterate (fn [{seen :seen [f & r] :s}] (cond (seen f)   f
+                                                           (empty? r) nil
+                                                           :else      {:seen (conj seen f) :s r}))
+                        {:seen #{} :s s})
+            lst (first (drop-while map? it))
+            cycle-at (if lst lst nil)]
+        (if cycle-at
+          (+ 1 (count (take-while (complement #{cycle-at}) (nnext s))))
+          0)))
+
+(t/deftest cycle-nb-test
+  (t/are [in ex] (= (cycle-nb in) ex)
+         1 0
+         2 0
+         3 1
+         4 0
+         5 0
+         6 1
+         7 6
+         8 0
+         9 1
+         10 0
+         13 5))
+
+(defn p26 "Find the d such as 1/d has the biggest cycle, d < n"
+  [n] (->> n
+           (+ 1)
+           (range 1)
+           (map (fn [x] [x (cycle-nb x)]))
+           (reduce (partial max-key second))
+           first))
+
+(comment "solution: "
+         (time (p26 1000))
+         "Elapsed time: 292.168087 msecs"
+         983)
